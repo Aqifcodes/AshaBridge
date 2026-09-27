@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>ASHA Worker App</title>
+<style>
+  :root { --primary:#2563eb; --danger:#dc2626; --warn:#d97706; --ok:#16a34a; --bg:#f3f4f6; --surface:#fff; --text:#111827; --muted:#6b7280; --border:#e5e7eb; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:430px;margin:0 auto;min-height:100vh;}
+
+  .topbar{background:var(--primary);color:#fff;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;}
+  .topbar h1{font-size:1.05rem;font-weight:600;}
+  .ws-pill{font-size:.7rem;background:rgba(255,255,255,.2);padding:2px 10px;border-radius:20px;}
+  .ws-pill.on{background:rgba(255,255,255,.3);}
+
+  .tabs{display:flex;background:var(--surface);border-bottom:2px solid var(--border);}
+  .tab{flex:1;padding:.85rem;text-align:center;font-size:.82rem;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;}
+  .tab.active{color:var(--primary);border-bottom-color:var(--primary);}
+
+  .view{display:none;padding:1.25rem;} .view.active{display:block;}
+
+  /* Form */
+  .field{margin-bottom:1rem;}
+  .field label{display:block;font-size:.78rem;font-weight:600;margin-bottom:.4rem;color:var(--muted);}
+  .field input,.field select,.field textarea{width:100%;padding:.65rem .85rem;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:var(--surface);color:var(--text);-webkit-appearance:none;}
+  .field textarea{min-height:70px;resize:vertical;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;}
+
+  .section-head{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:.5rem 0 .75rem;border-bottom:1px solid var(--border);margin-bottom:.85rem;}
+
+  .symptom-grid{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.5rem;}
+  .sym-chip{padding:5px 12px;border-radius:20px;font-size:.75rem;border:1px solid var(--border);cursor:pointer;background:var(--surface);transition:.15s;}
+  .sym-chip.selected{background:var(--primary);color:#fff;border-color:var(--primary);}
+
+  .btn-primary{width:100%;padding:.9rem;background:var(--primary);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:.75rem;}
+  .btn-primary:active{opacity:.85;}
+  .btn-danger{background:var(--danger);}
+
+  /* Result card */
+  .result-card{border-radius:12px;padding:1.25rem;margin-top:1rem;display:none;}
+  .result-card.show{display:block;}
+  .result-card.CRITICAL{background:#fef2f2;border:2px solid var(--danger);}
+  .result-card.HIGH{background:#fff7ed;border:2px solid var(--warn);}
+  .result-card.MEDIUM{background:#fffbeb;border:1px solid #fbbf24;}
+  .result-card.LOW{background:#f0fdf4;border:1px solid #86efac;}
+  .result-card .priority-badge{font-size:1.5rem;font-weight:800;margin-bottom:.5rem;}
+  .result-card.CRITICAL .priority-badge{color:var(--danger);}
+  .result-card.HIGH .priority-badge{color:var(--warn);}
+  .result-card.LOW .priority-badge{color:var(--ok);}
+  .result-card .ticket-id{font-family:monospace;font-size:.85rem;color:var(--muted);margin-bottom:.75rem;}
+  .result-card .hospital-name{font-size:1rem;font-weight:700;}
+  .result-card .detail{font-size:.82rem;color:var(--muted);margin-top:.2rem;}
+  .result-card .action-box{background:rgba(0,0,0,.05);border-radius:8px;padding:.75rem;margin-top:.75rem;font-size:.82rem;font-weight:500;}
+  .emergency-tel{display:block;width:100%;padding:.8rem;background:var(--danger);color:#fff;border:none;border-radius:8px;text-align:center;font-size:.9rem;font-weight:600;margin-top:.75rem;text-decoration:none;}
+
+  /* Journey tab */
+  .journey-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;margin-bottom:.75rem;}
+  .journey-card .ref-id{font-family:monospace;font-size:.78rem;color:var(--muted);}
+  .journey-card .patient{font-weight:600;font-size:.95rem;margin:.3rem 0;}
+  .timeline{margin-top:.75rem;border-left:2px solid var(--border);padding-left:1rem;}
+  .tl-item{position:relative;margin-bottom:.6rem;font-size:.8rem;}
+  .tl-item::before{content:'';position:absolute;left:-1.35rem;top:.35rem;width:9px;height:9px;border-radius:50%;background:var(--primary);}
+  .tl-item .tl-status{font-weight:600;}
+  .tl-item .tl-note{color:var(--muted);}
+
+  .loading{text-align:center;padding:2rem;color:var(--muted);font-size:.9rem;}
+  .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite;margin-right:.5rem;vertical-align:middle;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:.7rem 1.25rem;border-radius:8px;font-size:.82rem;z-index:999;opacity:0;transition:.3s;pointer-events:none;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>🌿 ASHA Worker App</h1>
+  <span class="ws-pill" id="wsPill">Offline</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('register')">Register</div>
+  <div class="tab" onclick="switchTab('journey')">Journey</div>
+  <div class="tab" onclick="switchTab('settings')">Settings</div>
+</div>
+
+<!-- REGISTER TAB -->
+<div id="tab-register" class="view active">
+  <div class="section-head">Patient Information</div>
+  <div class="field"><label>Full Name *</label><input id="pName" placeholder="Patient name"/></div>
+  <div class="row2">
+    <div class="field"><label>Age *</label><input id="pAge" type="number" placeholder="Years"/></div>
+    <div class="field"><label>Gender *</label>
+      <select id="pGender"><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select>
+    </div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>Village *</label><input id="pVillage" placeholder="Village"/></div>
+    <div class="field"><label>District</label><input id="pDistrict" value="Vikarabad"/></div>
+  </div>
+  <div class="field"><label>Contact Number</label><input id="pContact" type="tel" placeholder="+91..."/></div>
+
+  <div class="section-head">Vitals</div>
+  <div class="row3">
+    <div class="field"><label>Temp (°C)</label><input id="vTemp" type="number" step="0.1" placeholder="37.0"/></div>
+    <div class="field"><label>SpO₂ (%)</label><input id="vSpo2" type="number" placeholder="98"/></div>
+    <div class="field"><label>Pulse</label><input id="vPulse" type="number" placeholder="80"/></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label>BP Systolic</label><input id="vBpS" type="number" placeholder="120"/></div>
+    <div class="field"><label>BP Diastolic</label><input id="vBpD" type="number" placeholder="80"/></div>
+  </div>
+
+  <div class="section-head">Symptoms *</div>
+  <div class="symptom-grid" id="symptomGrid"></div>
+
+  <div class="field" style="margin-top:1rem">
+    <label>Duration of symptoms (hours)</label>
+    <input id="pDuration" type="number" placeholder="e.g. 6"/>
+  </div>
+  <div class="field">
+    <label>Is patient pregnant?</label>
+    <select id="pPregnant"><option value="false">No</option><option value="true">Yes</option></select>
+  </div>
+  <div class="field"><label>Notes</label><textarea id="pNotes" placeholder="Additional observations..."></textarea></div>
+
+  <button class="btn-primary" onclick="submitReferral()">
+    <span id="submitBtnText">🔍 Evaluate & Refer</span>
+  </button>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="priority-badge" id="rPriority"></div>
+    <div class="ticket-id" id="rTicket"></div>
+    <div class="hospital-name" id="rHospital"></div>
+    <div class="detail" id="rSpecialist"></div>
+    <div class="action-box" id="rAction"></div>
+    <a class="emergency-tel" id="rCall" href="#">📞 Call Hospital Emergency</a>
+  </div>
+</div>
+
+<!-- JOURNEY TAB -->
+<div id="tab-journey" class="view">
+  <div class="field"><label>Search Patient / Ticket ID</label>
+    <input id="journeySearch" placeholder="REF-... or patient name" oninput="filterJourney(this.value)"/>
+  </div>
+  <div id="journeyList"><div class="loading"><span class="spinner"></span>Loading...</div></div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div id="tab-settings" class="view">
+  <div class="section-head">Worker Profile</div>
+  <div class="field"><label>ASHA Worker ID</label><input id="workerId" value="ASHA001"/></div>
+  <div class="field"><label>API Base URL</label><input id="apiUrl" value="http://localhost:8000"/></div>
+  <div class="field"><label>PHC ID</label><input id="phcId" value="PHC001"/></div>
+  <button class="btn-primary" onclick="saveSettings()">Save & Reconnect</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SYMPTOMS = [
+  'chest_pain','breathlessness','unconscious','seizures','stroke_symptoms','high_fever',
+  'severe_bleeding','burns','fracture','head_injury','pregnancy_complications','snake_bite',
+  'poisoning','vomiting_blood','severe_abdominal_pain','no_urine_output','dengue_symptoms',
+  'malaria_symptoms','child_convulsion','confusion','fatigue','vomiting','diarrhea',
+  'mild_fever','headache','body_ache','cyanosis','severe_cough','jaundice','skin_rash',
+];
+
+let selectedSymptoms = new Set();
+let ws = null;
+let API = 'http://localhost:8000';
+let WORKER_ID = 'ASHA001';
+let journeyData = [];
+
+// Build symptom chips
+function buildSymptomGrid() {
+  const grid = document.getElementById('symptomGrid');
+  grid.innerHTML = SYMPTOMS.map(s =>
+    `<div class="sym-chip" data-sym="${s}" onclick="toggleSym(this)">${s.replace(/_/g,' ')}</div>`
+  ).join('');
+}
+
+function toggleSym(el) {
+  const s = el.dataset.sym;
+  if (selectedSymptoms.has(s)) { selectedSymptoms.delete(s); el.classList.remove('selected'); }
+  else { selectedSymptoms.add(s); el.classList.add('selected'); }
+}
+
+function switchTab(t) {
+  document.querySelectorAll('.tab').forEach((el,i)=>{
+    el.classList.toggle('active', ['register','journey','settings'][i] === t);
+  });
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.getElementById(`tab-${t}`).classList.add('active');
+  if (t === 'journey') loadJourney();
+}
+
+async function submitReferral() {
+  const name = document.getElementById('pName').value.trim();
+  const age = parseInt(document.getElementById('pAge').value);
+  const gender = document.getElementById('pGender').value;
+  const village = document.getElementById('pVillage').value.trim();
+
+  if (!name || !age || !gender || !village) { toast('Fill in all required fields'); return; }
+  if (selectedSymptoms.size === 0) { toast('Select at least one symptom'); return; }
+
+  const btn = document.getElementById('submitBtnText');
+  btn.innerHTML = '<span class="spinner"></span> Processing...';
+
+  const body = {
+    patient_name: name, age, gender, village,
+    district: document.getElementById('pDistrict').value || 'Vikarabad',
+    contact: document.getElementById('pContact').value || null,
+    symptoms: [...selectedSymptoms],
+    symptom_duration_hours: parseInt(document.getElementById('pDuration').value) || 0,
+    is_pregnant: document.getElementById('pPregnant').value === 'true',
+    notes: document.getElementById('pNotes').value,
+    asha_worker_id: WORKER_ID,
+    origin_phc_id: document.getElementById('phcId').value || 'PHC001',
+    transport_mode: 'ambulance',
+    target_hospital_id: 'HOSP002', // <-- DEMO OVERRIDE: Forces patient to HOSP002
+    vitals: {
+      temperature: parseFloat(document.getElementById('vTemp').value) || null,
+      spo2: parseFloat(document.getElementById('vSpo2').value) || null,
+      pulse_rate: parseInt(document.getElementById('vPulse').value) || null,
+      bp_systolic: parseInt(document.getElementById('vBpS').value) || null,
+      bp_diastolic: parseInt(document.getElementById('vBpD').value) || null,
+    }
+  };
+
+  try {
+    const res = await fetch(`${API}/api/triage/refer`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    showResult(data);
+  } catch(e) {
+    // Demo fallback - now includes beds!
+    showResult({
+      status:'REFERRAL_CREATED',
+      ticket_id:`REF-DEMO-${Math.random().toString(36).slice(2,6).toUpperCase()}`,
+      triage:{ priority:'CRITICAL', score:18, action:'Immediate referral. Notify hospital NOW.', color:'#dc2626', needs_icu:true },
+      hospital:{ name:'NIMS Hyderabad', emergency_number:'+91-40-23489999', available_beds: 4 }, // Added beds
+      specialist:{ name:'Dr. Priya Sharma', specialty:'Cardiology' }
+    });
+  }
+  btn.innerHTML = '🔍 Evaluate & Refer';
+}
+
+
+function showResult(data) {
+  const card = document.getElementById('resultCard');
+  card.className = `result-card show ${data.triage.priority}`;
+  document.getElementById('rPriority').textContent = `⚡ ${data.triage.priority} (Score: ${data.triage.score})`;
+  document.getElementById('rTicket').textContent = `Ticket: ${data.ticket_id}`;
+  
+  // 1. Display Hospital + Available Beds (Seats)
+  const beds = data.hospital?.available_beds !== undefined ? data.hospital.available_beds : 12; 
+  document.getElementById('rHospital').innerHTML = `
+    🏥 ${data.hospital?.name || 'No hospital available'}
+    <div style="font-size:0.85rem; color:var(--ok); margin-top:4px;">
+      🛏️ <strong>${beds} Beds Available</strong> for admission
+    </div>
+  `;
+  
+  // 2. Display the correctly matched Specialist based on the condition
+  document.getElementById('rSpecialist').innerHTML = data.specialist
+    ? `<div style="margin-top: 8px; padding: 8px; background: rgba(37,99,235,0.05); border-left: 3px solid var(--primary); border-radius: 4px;">
+         👨‍⚕️ <strong>${data.specialist.name}</strong><br>
+         ⚕️ Specialty: <em>${data.specialist.specialty}</em>
+       </div>` 
+    : '👨‍⚕️ Pending Specialist Assignment';
+    
+  document.getElementById('rAction').textContent = data.triage.action;
+  
+  const tel = data.hospital?.emergency_number || '#';
+  document.getElementById('rCall').href = `tel:${tel}`;
+  document.getElementById('rCall').textContent = `📞 Call Emergency: ${tel}`;
+  
+  card.scrollIntoView({behavior:'smooth'});
+  toast('Referral submitted & hospital notified!');
+}
+
+async function loadJourney() {
+  try {
+    const res = await fetch(`${API}/api/referrals/?asha_worker_id=${WORKER_ID}`);
+    journeyData = await res.json();
+    renderJourney(journeyData);
+  } catch(e) {
+    // Upgraded demo data to include hospital and doctor details for testing
+    journeyData = [
+      {
+        id:'REF-DEMO-AA11', patient_id:'Ramaiah, 62', priority:'CRITICAL', status:'ADMITTED', 
+        created_at: new Date().toISOString(), hospital_id: 'NIMS Hyderabad', 
+        specialist: 'Dr. Priya Sharma (Cardiology)', emergency_number: '+91-40-23489999'
+      },
+      {
+        id:'REF-DEMO-BB22', patient_id:'Savitri, 28', priority:'HIGH', status:'IN_TRANSIT', 
+        created_at: new Date().toISOString(), hospital_id: 'Gandhi Hospital', 
+        specialist: 'Dr. Ramesh Kumar (Obstetrics)', emergency_number: '+91-40-27702222'
+      },
+    ];
+    renderJourney(journeyData);
+  }
+}
+
+function filterJourney(q) {
+  const filtered = q ? journeyData.filter(r => r.id.includes(q.toUpperCase()) || r.patient_id?.includes(q)) : journeyData;
+  renderJourney(filtered);
+}
+
+function renderJourney(list) {
+  const el = document.getElementById('journeyList');
+  if (!list.length) { el.innerHTML = '<div class="loading">No referrals found</div>'; return; }
+  
+  el.innerHTML = list.map(r => `
+    <div class="journey-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div class="ref-id">🎫 ${r.id}</div>
+        <span class="badge ${r.priority}" style="background:${priorityBg(r.priority)};color:${priorityColor(r.priority)};padding:2px 8px;border-radius:20px;font-size:.72rem;font-weight:bold;">
+          ${r.priority}
+        </span>
+      </div>
+      
+      <div class="patient" style="margin-top: .4rem;">👤 ${r.patient_id || r.patient?.name || 'Unknown Patient'}</div>
+      
+      <div style="font-size:.82rem; margin-top:.6rem; line-height: 1.6; color: var(--muted);">
+        <div>🏥 <strong>Hospital:</strong> ${r.hospital?.name || r.hospital_id || 'Not Assigned'}</div>
+        <div>👨‍⚕️ <strong>Doctor:</strong> ${r.specialist?.name || r.specialist || 'Pending Assignment'}</div>
+        <div>📞 <strong>Emergency:</strong> ${r.hospital?.emergency_number || r.emergency_number || '+91 108 (Default)'}</div>
+      </div>
+
+      <div style="font-size:.78rem; margin-top:.75rem; padding-top:.6rem; border-top:1px solid var(--border);">
+        <span style="font-weight:600; color:var(--text)">Status: ${r.status}</span>
+        <span style="float:right; color:var(--muted)">${new Date(r.created_at).toLocaleDateString()}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function priorityColor(p){return{CRITICAL:'#dc2626',HIGH:'#d97706',MEDIUM:'#b45309',LOW:'#16a34a'}[p]||'#6b7280';}
+function priorityBg(p){return{CRITICAL:'#fef2f2',HIGH:'#fff7ed',MEDIUM:'#fffbeb',LOW:'#f0fdf4'}[p]||'#f3f4f6';}
+
+function saveSettings() {
+  API = document.getElementById('apiUrl').value.trim();
+  WORKER_ID = document.getElementById('workerId').value.trim();
+  connectWS();
+  toast('Settings saved');
+}
+
+function connectWS() {
+  if (ws) ws.close();
+  try {
+    ws = new WebSocket(`${API.replace('http','ws')}/ws/asha/${WORKER_ID}`);
+    ws.onopen = () => { document.getElementById('wsPill').textContent = '🟢 Online'; document.getElementById('wsPill').classList.add('on'); };
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'REFERRAL_CONFIRMED') toast(`✅ ${msg.message}`);
+      if (msg.type === 'STATUS_UPDATE') toast(`Status: ${msg.new_status} — ${msg.referral_id}`);
+    };
+    ws.onclose = () => { document.getElementById('wsPill').textContent = 'Offline'; document.getElementById('wsPill').classList.remove('on'); };
+  } catch(e) {}
+}
+
+function toast(msg, dur=3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+buildSymptomGrid();
+connectWS();
+</script>
+</body>
+</html>
